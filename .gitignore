@@ -27,6 +27,5 @@ env/
 Thumbs.db
 
 #md not required
-ADR.md
 report.html
 audit_log.json
