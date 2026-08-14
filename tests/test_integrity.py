@@ -17,7 +17,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from pydantic import ValidationError
 
-from reconciliation.ingestion import process_return
+from reconciliation.ingestion import process_return, validate_registry_integrity
 from reconciliation.rules import KNOWN_REASON_CODES, ConflictType
 from reconciliation.schemas import (
     BatchRegistryEntry,
@@ -145,7 +145,6 @@ _supplier_strategy = st.builds(
     supersedes_note_id=st.none(),
 )
 
-
 class TestReasonCodeClosedSet:
     @given(warehouse=_warehouse_strategy, notes=st.lists(_supplier_strategy, min_size=1, max_size=3))
     @settings(max_examples=200)
@@ -258,3 +257,88 @@ class TestLargeBatch:
                 continue
             assert by_line[f"RL-{i}"].disposition == Disposition.RESTOCK
             assert by_line[f"RL-{i}"].resolved_batch_code == f"BC-{i:04d}"
+
+
+
+# Cross-entry registry integrity (validate_registry_integrity)
+
+class TestCrossEntryRegistryIntegrity:
+    def test_clean_registry_has_no_warnings(self):
+        assert validate_registry_integrity(REGISTRY) == ()
+
+    def test_duplicate_batch_code_with_conflicting_data_is_flagged(self):
+        conflicting_registry = [
+            BatchRegistryEntry(
+                batch_code="BC-DUP", sku="SKU-1",
+                manufactured_date=date(2026, 1, 1), best_before_date=date(2027, 1, 1),
+            ),
+            BatchRegistryEntry(
+                batch_code="BC-DUP", sku="SKU-1",  # same code, different dates
+                manufactured_date=date(2026, 2, 1), best_before_date=date(2027, 2, 1),
+            ),
+        ]
+        warnings = validate_registry_integrity(conflicting_registry)
+        assert len(warnings) == 1
+        assert "BC-DUP" in warnings[0]
+
+    def test_duplicate_batch_code_with_identical_data_is_not_flagged(self):
+        # a re-listed identical entry is harmless, same principle as
+        # identical duplicate warehouse/supplier records elsewhere
+        entry_kwargs = dict(
+            batch_code="BC-SAME", sku="SKU-1",
+            manufactured_date=date(2026, 1, 1), best_before_date=date(2027, 1, 1),
+        )
+        registry = [BatchRegistryEntry(**entry_kwargs), BatchRegistryEntry(**entry_kwargs)]
+        assert validate_registry_integrity(registry) == ()
+
+    def test_multiple_distinct_duplicates_each_get_their_own_warning(self):
+        registry = [
+            BatchRegistryEntry(batch_code="BC-A", sku="SKU-1",
+                                manufactured_date=date(2026, 1, 1), best_before_date=date(2027, 1, 1)),
+            BatchRegistryEntry(batch_code="BC-A", sku="SKU-2",
+                                manufactured_date=date(2026, 1, 1), best_before_date=date(2027, 1, 1)),
+            BatchRegistryEntry(batch_code="BC-B", sku="SKU-1",
+                                manufactured_date=date(2026, 1, 1), best_before_date=date(2027, 1, 1)),
+            BatchRegistryEntry(batch_code="BC-B", sku="SKU-3",
+                                manufactured_date=date(2026, 1, 1), best_before_date=date(2027, 1, 1)),
+        ]
+        warnings = validate_registry_integrity(registry)
+        assert len(warnings) == 2
+
+
+
+# Aggregate confidence (LineItemDecision.overall_confidence)
+
+class TestOverallConfidence:
+    def test_clean_agreement_is_full_confidence(self):
+        decisions = process_return(
+            [wh(condition_grade=ConditionGrade.SELLABLE, claimed_batch_code="BC-2026-0817-A")],
+            [sn(claimed_batch_code="BC-2026-0817-A")],
+            REGISTRY,
+        )
+        assert decisions[0].overall_confidence == 1.0
+
+    def test_unknown_condition_drags_confidence_to_zero(self):
+        decisions = process_return(
+            [wh(condition_grade=ConditionGrade.UNKNOWN, claimed_batch_code="BC-2026-0817-A")],
+            [sn(claimed_batch_code="BC-2026-0817-A")],
+            REGISTRY,
+        )
+        assert decisions[0].overall_confidence == 0.0
+
+    def test_confidence_is_the_minimum_not_average_or_batch_only(self):
+        # condition confidence is reduced (no photo evidence backing a
+        # MAJOR_DAMAGE claim, 0.75), batch confidence is full (1.0);
+        # overall must reflect the WEAKER of the two, not an average,
+        # and not just whichever rule happens to run last
+        decisions = process_return(
+            [wh(condition_grade=ConditionGrade.MAJOR_DAMAGE, inspector_has_photo_evidence=False,
+                claimed_batch_code="BC-2026-0817-A")],
+            [sn(claimed_batch_code="BC-2026-0817-A", restock_required=True)],
+            REGISTRY,
+        )
+        assert decisions[0].overall_confidence == 0.75
+
+    def test_missing_evidence_quarantine_has_zero_confidence(self):
+        decisions = process_return([wh(claimed_batch_code="BC-2026-0817-A")], [], REGISTRY)
+        assert decisions[0].overall_confidence == 0.0

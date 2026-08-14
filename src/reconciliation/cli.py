@@ -28,6 +28,7 @@ from reconciliation.ingestion import (
     parse_supplier_note,
     parse_warehouse_record,
     process_return,
+    validate_registry_integrity,
     verify_determinism,
 )
 from reconciliation.schemas import (
@@ -193,6 +194,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     else:
         print("No --input given, running the built-in demo scenario.\n")
         warehouse_records, supplier_notes, registry = _build_demo_shipment()
+
+    for warning in validate_registry_integrity(registry):
+        print(f"WARNING: registry integrity: {warning}", file=sys.stderr)
 
     decisions = process_return(warehouse_records, supplier_notes, registry)
 

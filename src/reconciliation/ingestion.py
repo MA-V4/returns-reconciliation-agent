@@ -1,5 +1,5 @@
 """
-Ingestion layer. Three things live here:
+Ingestion layer. Three things:
 
 1. resolve_authoritative_supplier_note: the actual fix for the
    out-of-order-timestamp failure mode. Multiple SupplierCreditNote
@@ -245,6 +245,32 @@ def _sequencing_rule_outcome(resolution: SupplierNoteResolution) -> RuleOutcome:
     )
 
 
+def validate_registry_integrity(registry: Sequence[BatchRegistryEntry]) -> tuple[str, ...]:
+    """Checks the registry as a whole, not just one entry at a time.
+
+    BatchRegistryEntry's own validator (schemas.py) already rejects a
+    self-contradictory single entry. This catches the cross-entry
+    problem that validator can't see: the same batch_code appearing more
+    than once with genuinely conflicting data. This is a registry data
+    quality problem, not a warehouse/supplier dispute, there's no rule to
+    arbitrate it, it's surfaced as a warning for whoever loaded the
+    registry to fix, not resolved automatically.
+    """
+    warnings: list[str] = []
+    seen: dict[str, BatchRegistryEntry] = {}
+    for entry in registry:
+        prior = seen.get(entry.batch_code)
+        if prior is not None and prior != entry:
+            warnings.append(
+                f"duplicate batch_code {entry.batch_code!r} appears more than once in "
+                f"the registry with conflicting data (sku {prior.sku!r} vs {entry.sku!r}, "
+                f"manufactured_date {prior.manufactured_date} vs {entry.manufactured_date}, "
+                f"best_before_date {prior.best_before_date} vs {entry.best_before_date})"
+            )
+        seen[entry.batch_code] = entry
+    return tuple(warnings)
+
+
 def process_return(
     warehouse_records: Sequence[WarehouseInspectionRecord],
     supplier_notes: Sequence[SupplierCreditNote],
@@ -389,6 +415,7 @@ def _quarantine_for_missing_evidence(
         eligible_for_credit=None,
         physical_quantity=physical_quantity,
         creditable_quantity=0,
+        overall_confidence=0.0,
         rule_outcomes=(
             RuleOutcome(
                 conflict_type=conflict_type,
@@ -414,6 +441,7 @@ def _quarantine_for_internal_error(return_line_id: str, exc: Exception) -> LineI
         eligible_for_credit=None,
         physical_quantity=0,
         creditable_quantity=0,
+        overall_confidence=0.0,
         rule_outcomes=(
             RuleOutcome(
                 conflict_type=ConflictType.INTERNAL_ERROR,
