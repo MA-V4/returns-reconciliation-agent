@@ -55,9 +55,9 @@ def decision(**overrides):
     return LineItemDecision(**base)
 
 
-
+# ---------------------------------------------------------------------------
 # _serialize_value
-
+# ---------------------------------------------------------------------------
 
 class TestSerializeValue:
     def test_enum_becomes_its_value(self):
@@ -79,9 +79,9 @@ class TestSerializeValue:
         assert _serialize_value("text") == "text"
 
 
-
+# ---------------------------------------------------------------------------
 # rule_outcome_to_dict
-
+# ---------------------------------------------------------------------------
 
 class TestRuleOutcomeToDict:
     def test_all_fields_present_with_correct_types(self):
@@ -121,9 +121,9 @@ class TestRuleOutcomeToDict:
         assert d["detail"] == {}
 
 
-
+# ---------------------------------------------------------------------------
 # decision_to_dict
-
+# ---------------------------------------------------------------------------
 
 class TestDecisionToDict:
     def test_top_level_structure(self):
@@ -142,6 +142,21 @@ class TestDecisionToDict:
         d = decision_to_dict(decision(disposition=Disposition.QUARANTINE))
         assert d["requires_human_review"] is True
 
+    def test_system_error_false_for_an_ordinary_business_quarantine(self):
+        # SKU_MISMATCH, missing evidence, etc, none of these are bugs
+        d = decision_to_dict(decision(
+            disposition=Disposition.QUARANTINE,
+            rule_outcomes=(outcome(conflict_type=ConflictType.IDENTITY_MISMATCH),),
+        ))
+        assert d["system_error"] is False
+
+    def test_system_error_true_when_an_internal_error_outcome_is_present(self):
+        d = decision_to_dict(decision(
+            disposition=Disposition.QUARANTINE,
+            rule_outcomes=(outcome(conflict_type=ConflictType.INTERNAL_ERROR),),
+        ))
+        assert d["system_error"] is True
+
     def test_rule_outcomes_is_a_list_of_dicts(self):
         d = decision_to_dict(decision(rule_outcomes=(outcome(), outcome(conflict_type=ConflictType.QUANTITY))))
         assert isinstance(d["rule_outcomes"], list)
@@ -149,9 +164,9 @@ class TestDecisionToDict:
         assert d["rule_outcomes"][1]["conflict_type"] == "quantity"
 
 
-
+# ---------------------------------------------------------------------------
 # write_audit_log
-
+# ---------------------------------------------------------------------------
 
 class TestWriteAuditLog:
     def test_writes_valid_json_that_round_trips(self, tmp_path):
@@ -172,9 +187,9 @@ class TestWriteAuditLog:
             assert json.load(f) == []
 
 
-
+# ---------------------------------------------------------------------------
 # render_decision_report
-
+# ---------------------------------------------------------------------------
 
 class TestRenderDecisionReport:
     def test_contains_key_identifying_fields(self):
@@ -242,9 +257,9 @@ class TestRenderDecisionReport:
         assert "candidates considered" not in report
 
 
-
+# ---------------------------------------------------------------------------
 # Boxed terminal report
-
+# ---------------------------------------------------------------------------
 
 class TestBoxRenderer:
     def test_structural_lines_are_all_the_same_length(self):
@@ -291,9 +306,9 @@ class TestBoxRenderer:
         assert "RL-2" in report
 
 
-
+# ---------------------------------------------------------------------------
 # render_shipment_report
-
+# ---------------------------------------------------------------------------
 
 class TestRenderShipmentReport:
     def test_summary_line_counts_by_disposition(self):

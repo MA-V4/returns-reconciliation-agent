@@ -15,7 +15,7 @@ from enum import Enum
 from typing import Any, Sequence
 
 from reconciliation.engine import LineItemDecision
-from reconciliation.rules import RuleOutcome
+from reconciliation.rules import ConflictType, RuleOutcome
 
 
 def _serialize_value(value: Any) -> Any:
@@ -44,6 +44,12 @@ def rule_outcome_to_dict(outcome: RuleOutcome) -> dict:
 
 
 def decision_to_dict(decision: LineItemDecision) -> dict:
+    # A quarantine because the evidence was genuinely ambiguous is a
+    # different event than a quarantine because the reconciliation code
+    # itself threw. Both route to the same disposition (ADR-006), but a
+    # consuming system should be able to tell "review this stock" apart
+    # from "page an engineer", this flag is that distinction.
+    system_error = any(o.conflict_type == ConflictType.INTERNAL_ERROR for o in decision.rule_outcomes)
     return {
         "return_line_id": decision.return_line_id,
         "sku": decision.sku,
@@ -55,6 +61,7 @@ def decision_to_dict(decision: LineItemDecision) -> dict:
         "creditable_quantity": decision.creditable_quantity,
         "overall_confidence": decision.overall_confidence,
         "requires_human_review": decision.disposition.value == "quarantine",
+        "system_error": system_error,
         "rule_outcomes": [rule_outcome_to_dict(o) for o in decision.rule_outcomes],
     }
 
@@ -76,7 +83,7 @@ def render_decision_report(decision: LineItemDecision) -> str:
     """
     lines = [
         f"Return line {decision.return_line_id} (SKU {decision.sku})",
-        f"  Disposition: {decision.disposition.value.upper()} (overall confidence {decision.overall_confidence:.2f})",
+        f"  Disposition: {decision.disposition.value.upper()} (evidence confidence {decision.overall_confidence:.2f})",
         f"  Temporal bucket: {decision.temporal_bucket}",
         f"  Resolved batch code: {decision.resolved_batch_code or 'unresolved'}",
         f"  Eligible for credit: {decision.eligible_for_credit}",
@@ -181,7 +188,7 @@ def render_decision_box(decision: LineItemDecision) -> str:
     lines.append(_box_line(f"BEST BEFORE:  {decision.temporal_bucket}"))
     lines.append(_box_line(f"PHYSICAL QTY: {decision.physical_quantity}"))
     lines.append(_box_line(f"CREDIT QTY:   {decision.creditable_quantity}"))
-    lines.append(_box_line(f"CONFIDENCE:   {decision.overall_confidence:.2f}"))
+    lines.append(_box_line(f"EVIDENCE CONF: {decision.overall_confidence:.2f}"))
     lines.append(_box_bottom())
     return "\n".join(lines)
 
