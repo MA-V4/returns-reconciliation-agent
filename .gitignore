@@ -1,0 +1,30 @@
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# pytest
+.pytest_cache/
+
+# Hypothesis's example database and cache
+.hypothesis/
+
+# packaging / editable install artifacts
+*.egg-info/
+*.egg
+build/
+dist/
+
+# virtual environments
+.venv/
+venv/
+env/
+
+# editor/OS cruft
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+#md not required
+ADR.md

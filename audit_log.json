@@ -1,0 +1,378 @@
+[
+  {
+    "return_line_id": "RL-1",
+    "sku": "SKU-KETTLE-01",
+    "disposition": "restock",
+    "temporal_bucket": "2027-08",
+    "resolved_batch_code": "BC-2026-0817-A",
+    "eligible_for_credit": true,
+    "physical_quantity": 6,
+    "creditable_quantity": 6,
+    "requires_human_review": false,
+    "rule_outcomes": [
+      {
+        "conflict_type": "supplier_note_sequencing",
+        "conflict_detected": false,
+        "winner": "agreement",
+        "resolved_value": "SN-1",
+        "confidence": 1.0,
+        "reasoning": "Only one supplier note received for this line; no ordering to resolve.",
+        "reason_code": "SEQUENCING_SINGLE_NOTE",
+        "evidence_discarded": [],
+        "triggers_quarantine": false,
+        "detail": {}
+      },
+      {
+        "conflict_type": "condition",
+        "conflict_detected": false,
+        "winner": "agreement",
+        "resolved_value": true,
+        "confidence": 1.0,
+        "reasoning": "Warehouse condition_grade=sellable and supplier restock_required=True agree, no conflict to resolve.",
+        "reason_code": "CONDITION_AGREEMENT",
+        "evidence_discarded": [],
+        "triggers_quarantine": false,
+        "detail": {}
+      },
+      {
+        "conflict_type": "batch_code",
+        "conflict_detected": false,
+        "winner": "agreement",
+        "resolved_value": "BC-2026-0817-A",
+        "confidence": 1.0,
+        "reasoning": "Warehouse and supplier batch codes agree exactly; no registry lookup needed.",
+        "reason_code": "BATCH_EXACT_AGREEMENT",
+        "evidence_discarded": [],
+        "triggers_quarantine": false,
+        "detail": {}
+      },
+      {
+        "conflict_type": "best_before",
+        "conflict_detected": false,
+        "winner": "registry",
+        "resolved_value": "2027-08-17",
+        "confidence": 1.0,
+        "reasoning": "Best-before taken from the batch registry entry for BC-2026-0817-A, not from either party's stated date.",
+        "reason_code": "BEST_BEFORE_FROM_REGISTRY",
+        "evidence_discarded": [],
+        "triggers_quarantine": false,
+        "detail": {}
+      },
+      {
+        "conflict_type": "quantity",
+        "conflict_detected": false,
+        "winner": "agreement",
+        "resolved_value": 6,
+        "confidence": 1.0,
+        "reasoning": "Supplier's claimed quantity matches the physically inspected count exactly (6).",
+        "reason_code": "QUANTITY_EXACT_MATCH",
+        "evidence_discarded": [],
+        "triggers_quarantine": false,
+        "detail": {}
+      },
+      {
+        "conflict_type": "eligibility",
+        "conflict_detected": false,
+        "winner": "agreement",
+        "resolved_value": true,
+        "confidence": 1.0,
+        "reasoning": "Supplier already marked eligible; no conflict to resolve.",
+        "reason_code": "ELIGIBILITY_AGREEMENT",
+        "evidence_discarded": [],
+        "triggers_quarantine": false,
+        "detail": {}
+      }
+    ]
+  },
+  {
+    "return_line_id": "RL-2",
+    "sku": "SKU-KETTLE-01",
+    "disposition": "scrap",
+    "temporal_bucket": "2027-08",
+    "resolved_batch_code": "BC-2026-0817-A",
+    "eligible_for_credit": true,
+    "physical_quantity": 3,
+    "creditable_quantity": 3,
+    "requires_human_review": false,
+    "rule_outcomes": [
+      {
+        "conflict_type": "supplier_note_sequencing",
+        "conflict_detected": false,
+        "winner": "agreement",
+        "resolved_value": "SN-2",
+        "confidence": 1.0,
+        "reasoning": "Only one supplier note received for this line; no ordering to resolve.",
+        "reason_code": "SEQUENCING_SINGLE_NOTE",
+        "evidence_discarded": [],
+        "triggers_quarantine": false,
+        "detail": {}
+      },
+      {
+        "conflict_type": "condition",
+        "conflict_detected": true,
+        "winner": "warehouse",
+        "resolved_value": false,
+        "confidence": 1.0,
+        "reasoning": "Warehouse recorded condition_grade=major_damage (implies restockable=False); supplier claims restock_required=True. Direct physical observation outranks a financially motivated inference: restocking a damaged unit instead of crediting it minimises the supplier's credit exposure.",
+        "reason_code": "CONDITION_WAREHOUSE_OVERRIDE",
+        "evidence_discarded": [
+          "supplier restock_required=True"
+        ],
+        "triggers_quarantine": false,
+        "detail": {}
+      },
+      {
+        "conflict_type": "batch_code",
+        "conflict_detected": false,
+        "winner": "agreement",
+        "resolved_value": "BC-2026-0817-A",
+        "confidence": 1.0,
+        "reasoning": "Warehouse and supplier batch codes agree exactly; no registry lookup needed.",
+        "reason_code": "BATCH_EXACT_AGREEMENT",
+        "evidence_discarded": [],
+        "triggers_quarantine": false,
+        "detail": {}
+      },
+      {
+        "conflict_type": "best_before",
+        "conflict_detected": false,
+        "winner": "registry",
+        "resolved_value": "2027-08-17",
+        "confidence": 1.0,
+        "reasoning": "Best-before taken from the batch registry entry for BC-2026-0817-A, not from either party's stated date.",
+        "reason_code": "BEST_BEFORE_FROM_REGISTRY",
+        "evidence_discarded": [],
+        "triggers_quarantine": false,
+        "detail": {}
+      },
+      {
+        "conflict_type": "quantity",
+        "conflict_detected": true,
+        "winner": "warehouse",
+        "resolved_value": 3,
+        "confidence": 1.0,
+        "reasoning": "Supplier claimed credit for 9 units; warehouse physically inspected only 3. Crediting more units than were received is a physical impossibility, not a disagreement to arbitrate. Capped at the physical count (3).",
+        "reason_code": "QUANTITY_CAPPED_TO_PHYSICAL_COUNT",
+        "evidence_discarded": [
+          "supplier credit_quantity=9"
+        ],
+        "triggers_quarantine": false,
+        "detail": {}
+      },
+      {
+        "conflict_type": "eligibility",
+        "conflict_detected": true,
+        "winner": "warehouse",
+        "resolved_value": true,
+        "confidence": 1.0,
+        "reasoning": "Supplier marked ineligible, but warehouse recorded major_damage. Physical evidence of damage independently contradicts a 'no credit' claim from a party with a known incentive to minimise credit. Eligibility overridden to True.",
+        "reason_code": "ELIGIBILITY_WAREHOUSE_DAMAGE_OVERRIDE",
+        "evidence_discarded": [
+          "supplier eligible_for_credit=False"
+        ],
+        "triggers_quarantine": false,
+        "detail": {}
+      }
+    ]
+  },
+  {
+    "return_line_id": "RL-3",
+    "sku": "SKU-KETTLE-01",
+    "disposition": "restock",
+    "temporal_bucket": "2027-09",
+    "resolved_batch_code": "BC-2026-0901-C",
+    "eligible_for_credit": true,
+    "physical_quantity": 8,
+    "creditable_quantity": 8,
+    "requires_human_review": false,
+    "rule_outcomes": [
+      {
+        "conflict_type": "supplier_note_sequencing",
+        "conflict_detected": true,
+        "winner": "supplier",
+        "resolved_value": "SN-3B",
+        "confidence": 0.75,
+        "reasoning": "Notes considered: SN-3A (sequence_number=1, received_at=2026-09-03T09:30:00), SN-3B (sequence_number=2, received_at=2026-09-03T09:00:00). Arrival order would have chosen 'SN-3A' (it arrived last), sequence_number correctly identified 'SN-3B' as authoritative instead; received_at represents transport order only, sequence_number is authoritative. Anomalies noted: arrival order disagreement: 'SN-3A' arrived last (received_at=2026-09-03 09:30:00) and would have been chosen by a naive arrival-order implementation; 'SN-3B' has the higher sequence_number (2) and is the one actually used.",
+        "reason_code": "SEQUENCING_ARRIVAL_ORDER_OVERRIDDEN",
+        "evidence_discarded": [
+          "SN-3A"
+        ],
+        "triggers_quarantine": false,
+        "detail": {}
+      },
+      {
+        "conflict_type": "condition",
+        "conflict_detected": false,
+        "winner": "agreement",
+        "resolved_value": true,
+        "confidence": 1.0,
+        "reasoning": "Warehouse condition_grade=sellable and supplier restock_required=True agree, no conflict to resolve.",
+        "reason_code": "CONDITION_AGREEMENT",
+        "evidence_discarded": [],
+        "triggers_quarantine": false,
+        "detail": {}
+      },
+      {
+        "conflict_type": "batch_code",
+        "conflict_detected": true,
+        "winner": "supplier",
+        "resolved_value": "BC-2026-0901-C",
+        "confidence": 1.0,
+        "reasoning": "Supplier's claimed code 'BC-2026-0901-C' validates against the batch registry; warehouse's evidence ('BC-2O26-O9O1-C') does not repair to a confident registry match. The registry decided this, not source preference. Candidates considered: BC-2026-0901-C=78.6%, BC-2026-0817-A=64.3% (threshold 80%).",
+        "reason_code": "BATCH_SUPPLIER_REGISTRY_MATCH",
+        "evidence_discarded": [
+          "warehouse raw_scanner_output='BC-2O26-O9O1-C'"
+        ],
+        "triggers_quarantine": false,
+        "detail": {
+          "candidates": [
+            {
+              "batch_code": "BC-2026-0901-C",
+              "confidence": 0.7857
+            },
+            {
+              "batch_code": "BC-2026-0817-A",
+              "confidence": 0.6429
+            }
+          ],
+          "threshold": 0.8
+        }
+      },
+      {
+        "conflict_type": "best_before",
+        "conflict_detected": false,
+        "winner": "registry",
+        "resolved_value": "2027-09-01",
+        "confidence": 1.0,
+        "reasoning": "Best-before taken from the batch registry entry for BC-2026-0901-C, not from either party's stated date.",
+        "reason_code": "BEST_BEFORE_FROM_REGISTRY",
+        "evidence_discarded": [],
+        "triggers_quarantine": false,
+        "detail": {}
+      },
+      {
+        "conflict_type": "quantity",
+        "conflict_detected": false,
+        "winner": "agreement",
+        "resolved_value": 8,
+        "confidence": 1.0,
+        "reasoning": "Supplier's claimed quantity matches the physically inspected count exactly (8).",
+        "reason_code": "QUANTITY_EXACT_MATCH",
+        "evidence_discarded": [],
+        "triggers_quarantine": false,
+        "detail": {}
+      },
+      {
+        "conflict_type": "eligibility",
+        "conflict_detected": false,
+        "winner": "agreement",
+        "resolved_value": true,
+        "confidence": 1.0,
+        "reasoning": "Supplier already marked eligible; no conflict to resolve.",
+        "reason_code": "ELIGIBILITY_AGREEMENT",
+        "evidence_discarded": [],
+        "triggers_quarantine": false,
+        "detail": {}
+      }
+    ]
+  },
+  {
+    "return_line_id": "RL-4",
+    "sku": "SKU-KETTLE-01",
+    "disposition": "quarantine",
+    "temporal_bucket": "2027-09",
+    "resolved_batch_code": "BC-2026-0901-C",
+    "eligible_for_credit": null,
+    "physical_quantity": 2,
+    "creditable_quantity": 2,
+    "requires_human_review": true,
+    "rule_outcomes": [
+      {
+        "conflict_type": "supplier_note_sequencing",
+        "conflict_detected": false,
+        "winner": "agreement",
+        "resolved_value": "SN-4",
+        "confidence": 1.0,
+        "reasoning": "Only one supplier note received for this line; no ordering to resolve.",
+        "reason_code": "SEQUENCING_SINGLE_NOTE",
+        "evidence_discarded": [],
+        "triggers_quarantine": false,
+        "detail": {}
+      },
+      {
+        "conflict_type": "condition",
+        "conflict_detected": true,
+        "winner": "unresolved",
+        "resolved_value": null,
+        "confidence": 0.0,
+        "reasoning": "Warehouse condition_grade is UNKNOWN, the inspector could not determine physical state. Warehouse has no physical assertion to win this rule with, and supplier restock_required=False is not independently verifiable. Falls to quarantine.",
+        "reason_code": "CONDITION_UNKNOWN_UNRESOLVED",
+        "evidence_discarded": [],
+        "triggers_quarantine": true,
+        "detail": {}
+      },
+      {
+        "conflict_type": "batch_code",
+        "conflict_detected": true,
+        "winner": "supplier",
+        "resolved_value": "BC-2026-0901-C",
+        "confidence": 1.0,
+        "reasoning": "Supplier's claimed code 'BC-2026-0901-C' validates against the batch registry; warehouse's evidence ('###ILLEGIBLE###') does not repair to a confident registry match. The registry decided this, not source preference. Candidates considered: BC-2026-0817-A=6.9%, BC-2026-0901-C=6.9% (threshold 80%).",
+        "reason_code": "BATCH_SUPPLIER_REGISTRY_MATCH",
+        "evidence_discarded": [
+          "warehouse raw_scanner_output='###ILLEGIBLE###'"
+        ],
+        "triggers_quarantine": false,
+        "detail": {
+          "candidates": [
+            {
+              "batch_code": "BC-2026-0817-A",
+              "confidence": 0.069
+            },
+            {
+              "batch_code": "BC-2026-0901-C",
+              "confidence": 0.069
+            }
+          ],
+          "threshold": 0.8
+        }
+      },
+      {
+        "conflict_type": "best_before",
+        "conflict_detected": false,
+        "winner": "registry",
+        "resolved_value": "2027-09-01",
+        "confidence": 1.0,
+        "reasoning": "Best-before taken from the batch registry entry for BC-2026-0901-C, not from either party's stated date.",
+        "reason_code": "BEST_BEFORE_FROM_REGISTRY",
+        "evidence_discarded": [],
+        "triggers_quarantine": false,
+        "detail": {}
+      },
+      {
+        "conflict_type": "quantity",
+        "conflict_detected": false,
+        "winner": "agreement",
+        "resolved_value": 2,
+        "confidence": 1.0,
+        "reasoning": "Supplier's claimed quantity matches the physically inspected count exactly (2).",
+        "reason_code": "QUANTITY_EXACT_MATCH",
+        "evidence_discarded": [],
+        "triggers_quarantine": false,
+        "detail": {}
+      },
+      {
+        "conflict_type": "eligibility",
+        "conflict_detected": true,
+        "winner": "unresolved",
+        "resolved_value": null,
+        "confidence": 0.0,
+        "reasoning": "Supplier marked ineligible, but warehouse condition is UNKNOWN, there is no physical determination in either direction to reason from. Genuine toss-up, routed to quarantine rather than guessed.",
+        "reason_code": "ELIGIBILITY_UNKNOWN_CONDITION_UNRESOLVED",
+        "evidence_discarded": [],
+        "triggers_quarantine": true,
+        "detail": {}
+      }
+    ]
+  }
+]
