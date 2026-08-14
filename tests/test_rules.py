@@ -72,9 +72,9 @@ REGISTRY = [
 ]
 
 
-# ---------------------------------------------------------------------------
+
 # Rule 1: resolve_condition
-# ---------------------------------------------------------------------------
+
 
 class TestResolveCondition:
     def test_agreement_no_conflict(self):
@@ -113,9 +113,9 @@ class TestResolveCondition:
         assert outcome.triggers_quarantine is True
 
 
-# ---------------------------------------------------------------------------
+
 # repair_batch_code
-# ---------------------------------------------------------------------------
+
 
 class TestRepairBatchCode:
     def test_exact_match(self):
@@ -159,9 +159,9 @@ class TestRepairBatchCode:
         assert result.ambiguous is True
 
 
-# ---------------------------------------------------------------------------
+
 # Rule 2: resolve_batch_code
-# ---------------------------------------------------------------------------
+
 
 class TestResolveBatchCode:
     def test_exact_agreement_no_registry_needed(self):
@@ -214,35 +214,65 @@ class TestResolveBatchCode:
         assert outcome.triggers_quarantine is True
 
 
-# ---------------------------------------------------------------------------
+
 # Rule 3: resolve_best_before
-# ---------------------------------------------------------------------------
+
 
 class TestResolveBestBefore:
     def test_resolved_batch_uses_registry_date_not_either_partys_claim(self):
-        batch_outcome = resolve_batch_code(
-            wh(claimed_batch_code="BC-2026-0817-A"),
-            sn(claimed_batch_code="BC-2026-0817-A"),
-            REGISTRY,
-        )
-        outcome = resolve_best_before(batch_outcome, REGISTRY)
+        warehouse = wh(claimed_batch_code="BC-2026-0817-A")
+        supplier = sn(claimed_batch_code="BC-2026-0817-A")
+        batch_outcome = resolve_batch_code(warehouse, supplier, REGISTRY)
+        outcome = resolve_best_before(warehouse, supplier, batch_outcome, REGISTRY)
         assert outcome.winner == Winner.REGISTRY
         assert outcome.resolved_value == date(2027, 8, 17)  # the registry's date, not a guess
 
     def test_unresolved_batch_leaves_best_before_unresolved(self):
-        batch_outcome = resolve_batch_code(
-            wh(raw_scanner_output="###", claimed_batch_code=None),
-            sn(claimed_batch_code="ALSO-BAD"),
-            REGISTRY,
-        )
-        outcome = resolve_best_before(batch_outcome, REGISTRY)
+        warehouse = wh(raw_scanner_output="###", claimed_batch_code=None)
+        supplier = sn(claimed_batch_code="ALSO-BAD")
+        batch_outcome = resolve_batch_code(warehouse, supplier, REGISTRY)
+        outcome = resolve_best_before(warehouse, supplier, batch_outcome, REGISTRY)
         assert outcome.resolved_value is None
         assert outcome.triggers_quarantine is True
 
+    def test_agreeing_dates_are_not_flagged_as_a_conflict(self):
+        warehouse = wh(claimed_batch_code="BC-2026-0817-A", best_before_date=date(2027, 8, 17))
+        supplier = sn(claimed_batch_code="BC-2026-0817-A", claimed_best_before_date=date(2027, 8, 17))
+        batch_outcome = resolve_batch_code(warehouse, supplier, REGISTRY)
+        outcome = resolve_best_before(warehouse, supplier, batch_outcome, REGISTRY)
+        assert outcome.conflict_detected is False
 
-# ---------------------------------------------------------------------------
+    def test_disagreeing_dates_are_flagged_even_though_registry_still_wins(self):
+        # this is the actual bug caught in review: a real disagreement
+        # between the two parties used to be silently reported as
+        # conflict_detected=False just because the registry lookup
+        # itself succeeded. The resolution (registry wins) was always
+        # correct, only the conflict reporting was wrong.
+        warehouse = wh(claimed_batch_code="BC-2026-0817-A", best_before_date=date(2027, 9, 1))
+        supplier = sn(claimed_batch_code="BC-2026-0817-A", claimed_best_before_date=date(2027, 8, 1))
+        batch_outcome = resolve_batch_code(warehouse, supplier, REGISTRY)
+        outcome = resolve_best_before(warehouse, supplier, batch_outcome, REGISTRY)
+
+        assert outcome.conflict_detected is True
+        assert outcome.winner == Winner.REGISTRY  # still the registry, disagreement doesn't change who wins
+        assert outcome.resolved_value == date(2027, 8, 17)  # still the actual registry date
+        assert len(outcome.evidence_discarded) == 2
+        assert any("2027-09-01" in e for e in outcome.evidence_discarded)
+        assert any("2027-08-01" in e for e in outcome.evidence_discarded)
+
+    def test_one_side_silent_on_best_before_is_not_treated_as_disagreement(self):
+        # only one party stating a date isn't a disagreement, there's
+        # nothing to disagree with
+        warehouse = wh(claimed_batch_code="BC-2026-0817-A", best_before_date=date(2027, 9, 1))
+        supplier = sn(claimed_batch_code="BC-2026-0817-A", claimed_best_before_date=None)
+        batch_outcome = resolve_batch_code(warehouse, supplier, REGISTRY)
+        outcome = resolve_best_before(warehouse, supplier, batch_outcome, REGISTRY)
+        assert outcome.conflict_detected is False
+
+
+
 # Rule 4: resolve_quantity
-# ---------------------------------------------------------------------------
+
 
 class TestResolveQuantity:
     def test_supplier_overclaim_is_capped(self):
@@ -262,9 +292,9 @@ class TestResolveQuantity:
         assert outcome.resolved_value == 7
 
 
-# ---------------------------------------------------------------------------
+
 # Rule 5: resolve_eligibility
-# ---------------------------------------------------------------------------
+
 
 class TestResolveEligibility:
     def test_supplier_already_eligible_no_conflict(self):
@@ -306,11 +336,11 @@ class TestResolveEligibility:
         assert outcome.resolved_value is False
 
 
-# ---------------------------------------------------------------------------
+
 # reason_code: spot-checked per rule, not exhaustively per branch, decision
 # correctness for each branch is already covered above, this only confirms
 # the metadata is actually threaded through
-# ---------------------------------------------------------------------------
+
 
 class TestReasonCodes:
     def test_condition_codes(self):
@@ -342,21 +372,21 @@ class TestReasonCodes:
         assert resolve_eligibility(wh(condition_grade=ConditionGrade.SELLABLE), sn(eligible_for_credit=False)).reason_code == "ELIGIBILITY_SUPPLIER_STANDS"
 
     def test_best_before_codes(self):
-        batch_outcome = resolve_batch_code(
-            wh(claimed_batch_code="BC-2026-0817-A"), sn(claimed_batch_code="BC-2026-0817-A"), REGISTRY
-        )
-        assert resolve_best_before(batch_outcome, REGISTRY).reason_code == "BEST_BEFORE_FROM_REGISTRY"
+        warehouse_ok = wh(claimed_batch_code="BC-2026-0817-A")
+        supplier_ok = sn(claimed_batch_code="BC-2026-0817-A")
+        batch_outcome = resolve_batch_code(warehouse_ok, supplier_ok, REGISTRY)
+        assert resolve_best_before(warehouse_ok, supplier_ok, batch_outcome, REGISTRY).reason_code == "BEST_BEFORE_FROM_REGISTRY"
 
-        unresolved_batch = resolve_batch_code(
-            wh(raw_scanner_output="###", claimed_batch_code=None), sn(claimed_batch_code="BAD"), REGISTRY
-        )
-        assert resolve_best_before(unresolved_batch, REGISTRY).reason_code == "BEST_BEFORE_UNRESOLVED_BATCH"
+        warehouse_bad = wh(raw_scanner_output="###", claimed_batch_code=None)
+        supplier_bad = sn(claimed_batch_code="BAD")
+        unresolved_batch = resolve_batch_code(warehouse_bad, supplier_bad, REGISTRY)
+        assert resolve_best_before(warehouse_bad, supplier_bad, unresolved_batch, REGISTRY).reason_code == "BEST_BEFORE_UNRESOLVED_BATCH"
 
 
-# ---------------------------------------------------------------------------
+
 # Rule 2's candidate list (detail), the actual fix for "audit trail claims
 # candidates were considered but doesn't show them"
-# ---------------------------------------------------------------------------
+
 
 class TestBatchRepairCandidateList:
     def test_all_candidates_present_and_sorted_descending_by_confidence(self):

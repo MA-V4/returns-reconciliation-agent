@@ -123,6 +123,7 @@ class RuleOutcome:
 
 # Rule 1: condition / salvageability disagreement
 
+
 # Explicit assumption, stated here rather than left implicit: MINOR_DAMAGE is
 # treated as restockable. There is no fourth "discount" disposition in this
 # system, only SCRAP / RESTOCK / QUARANTINE, so MINOR_DAMAGE has to land
@@ -204,6 +205,8 @@ def resolve_condition(
 
 
 # Rule 2: batch code mismatch, and its repair helper
+
+
 
 @dataclass(frozen=True)
 class BatchRepairResult:
@@ -387,15 +390,35 @@ def resolve_batch_code(
 
 # Rule 3: best-before / temporal disagreement
 
+
+
 def resolve_best_before(
-    batch_outcome: RuleOutcome, registry: Sequence[BatchRegistryEntry]
+    warehouse: WarehouseInspectionRecord,
+    supplier: SupplierCreditNote,
+    batch_outcome: RuleOutcome,
+    registry: Sequence[BatchRegistryEntry],
 ) -> RuleOutcome:
     """Rule 3. See DECISION_RULES.md.
 
-    Entirely downstream of Rule 2's outcome, this is a registry lookup on
-    the resolved batch, not an independent dispute between the two claimed
-    dates. If Rule 2 didn't resolve, neither does this.
+    The resolution is entirely downstream of Rule 2, a registry lookup on
+    the resolved batch, the registry always wins regardless of what
+    either party claimed. But this now actually receives both parties'
+    stated dates specifically to detect and report a real disagreement
+    between them, previously this function only saw batch_outcome and
+    the registry, so a genuine warehouse/supplier disagreement on
+    best-before could be silently marked conflict_detected=False just
+    because the registry lookup itself succeeded. Caught in review:
+    the outcome (registry wins) was always correct, the conflict
+    reporting around it wasn't.
     """
+    warehouse_date = warehouse.best_before_date
+    supplier_date = supplier.claimed_best_before_date
+    dates_disagree = (
+        warehouse_date is not None
+        and supplier_date is not None
+        and warehouse_date != supplier_date
+    )
+
     if batch_outcome.resolved_value is None:
         return RuleOutcome(
             conflict_type=ConflictType.BEST_BEFORE,
@@ -428,22 +451,41 @@ def resolve_best_before(
             reason_code="BEST_BEFORE_REGISTRY_ENTRY_MISSING",
         )
 
+    if dates_disagree:
+        reasoning = (
+            f"Warehouse claimed best-before {warehouse_date}; supplier claimed "
+            f"{supplier_date}; these disagree. Best-before is a property of the "
+            f"resolved batch, not a value either party states directly, so both "
+            f"claims are discarded in favour of the registry entry for "
+            f"{entry.batch_code}: {entry.best_before_date}."
+        )
+        evidence_discarded = (
+            f"warehouse best_before_date={warehouse_date}",
+            f"supplier claimed_best_before_date={supplier_date}",
+        )
+    else:
+        reasoning = (
+            f"Best-before taken from the batch registry entry for {entry.batch_code}, "
+            "not from either party's stated date."
+        )
+        evidence_discarded = ()
+
     return RuleOutcome(
         conflict_type=ConflictType.BEST_BEFORE,
-        conflict_detected=False,
+        conflict_detected=dates_disagree,
         winner=Winner.REGISTRY,
         resolved_value=entry.best_before_date,
         confidence=1.0,
-        reasoning=(
-            f"Best-before taken from the batch registry entry for {entry.batch_code}, "
-            "not from either party's stated date."
-        ),
+        reasoning=reasoning,
+        evidence_discarded=evidence_discarded,
         reason_code="BEST_BEFORE_FROM_REGISTRY",
     )
 
 
 
 # Rule 4: quantity dispute
+
+
 
 def resolve_quantity(
     warehouse: WarehouseInspectionRecord, supplier: SupplierCreditNote
@@ -510,6 +552,7 @@ def resolve_quantity(
 
 
 # Rule 5: eligibility dispute
+
 
 def resolve_eligibility(
     warehouse: WarehouseInspectionRecord, supplier: SupplierCreditNote

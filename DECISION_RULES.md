@@ -83,6 +83,18 @@ that was actually identified.
 lookup, not a dispute, at that point. If Rule 2 is unresolved, the temporal
 bucket is explicitly `unknown, pending review`, never a guessed month.
 
+**Implementation note:** this document always described the trigger as
+"warehouse and supplier disagree," but for a period the actual rule only
+received the resolved batch and the registry, not either party's stated
+date, so a real disagreement between the two could be silently reported
+as `conflict_detected=False` purely because the registry lookup
+succeeded. Caught in review and fixed: `resolve_best_before` now takes
+both parties' claims directly. The winner never changed, the registry
+always resolved this, only the conflict reporting around it was wrong.
+When the two dates disagree, both are named in `evidence_discarded` and
+`conflict_detected` is `True`, even though the resolved value is still
+the registry's date either way.
+
 ---
 
 ## Rule 4: Quantity dispute

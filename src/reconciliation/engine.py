@@ -63,7 +63,12 @@ def reconcile_line_item(
             temporal_bucket=UNRESOLVED_BUCKET,
             resolved_batch_code=None,
             eligible_for_credit=None,
-            physical_quantity=0,
+            # warehouse is the original, untouched parameter, still valid
+            # even though something failed inside _reconcile_line_item.
+            # Caught in review: this used to hardcode 0 here, discarding a
+            # physically known fact instead of a genuinely unknown one,
+            # exactly backwards for an audit system.
+            physical_quantity=warehouse.inspected_quantity,
             creditable_quantity=0,
             overall_confidence=0.0,
             rule_outcomes=(
@@ -75,7 +80,10 @@ def reconcile_line_item(
                     confidence=0.0,
                     reasoning=(
                         f"Unhandled internal error during reconciliation: {exc!r}. "
-                        "Routed to quarantine rather than propagating a crash."
+                        "Routed to quarantine rather than propagating a crash. "
+                        f"Physical quantity ({warehouse.inspected_quantity}) is preserved "
+                        "from the warehouse record, it was never in question, only the "
+                        "reconciliation logic failed, not the underlying evidence."
                     ),
                     triggers_quarantine=True,
                     reason_code="INTERNAL_ERROR",
@@ -91,7 +99,7 @@ def _reconcile_line_item(
 ) -> LineItemDecision:
     """Runs all five rules and aggregates them.
 
-    Physical disposition (scrap/restock/quarantine) is driven by
+    Physical disposition (scrap/restock/quarantine) is driven only by
     Rule 1 (condition) and Rule 2 (batch resolution), those are the two
     things that determine whether the physical item can be safely routed
     at all. Rule 4 (quantity) and Rule 5 (eligibility) resolve
@@ -105,7 +113,7 @@ def _reconcile_line_item(
     """
     condition_outcome = resolve_condition(warehouse, supplier)
     batch_outcome = resolve_batch_code(warehouse, supplier, registry)
-    best_before_outcome = resolve_best_before(batch_outcome, registry)
+    best_before_outcome = resolve_best_before(warehouse, supplier, batch_outcome, registry)
     quantity_outcome = resolve_quantity(warehouse, supplier)
     eligibility_outcome = resolve_eligibility(warehouse, supplier)
 
