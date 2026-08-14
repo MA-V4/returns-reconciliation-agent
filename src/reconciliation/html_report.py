@@ -345,7 +345,7 @@ def _case_card(decision: LineItemDecision) -> str:
         ("Physical qty", decision.physical_quantity),
         ("Creditable qty", f"{decision.creditable_quantity}{credit_note}"),
         ("Credit eligible", decision.eligible_for_credit),
-        ("Confidence", f"{decision.overall_confidence:.2f}"),
+        ("Evidence confidence", f"{decision.overall_confidence:.2f}"),
     ]
     facts_html = "".join(
         f'<div><div class="fact-label">{_escape(label)}</div>'

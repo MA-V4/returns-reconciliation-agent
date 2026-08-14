@@ -18,7 +18,7 @@ cited evidence, never by which party said it.
 
 ```powershell
 pip install -e ".[dev]"
-pytest                              # 155 tests
+pytest                              # 160 tests
 python -m reconciliation.cli        # runs a built-in demo shipment
 python -m reconciliation.cli --box  # same demo, boxed report for recording
 python -m reconciliation.cli --output audit_log.json   # writes the full audit log
@@ -55,14 +55,31 @@ This was the first architecture decision made and it still holds. A
 decision that affects real inventory and real credit needs to be
 reproducible on rerun, testable rule by rule, and explainable by citing
 the specific rule that fired, not by describing what a model tends to
-do. Every one of the 155 tests in this repo tests deterministic code.
+do. Every one of the 160 tests in this repo tests deterministic code.
 An LLM in the decision path would make none of that possible. Full
 reasoning in `ADR.md`, decision ADR-001.
 
 ## How it works, component by component
 
-The pipeline is a straight line: parse evidence, resolve conflicts,
-decide, record. Each stage is a separate file with one job.
+Five stages, each a separate file with one job: evidence intake
+(`schemas.py`, `ingestion.py`'s parsing), conflict detection (the
+`conflict_detected` flag every rule returns), evidence arbitration
+(`rules.py`), routing (`engine.py`'s disposition derivation), and audit
+(`audit.py`, `html_report.py`). No stage reaches into another's job, the
+arbitration layer doesn't decide routing, the audit layer doesn't decide
+anything.
+
+One principle runs through all five rules, worth stating once rather
+than leaving implicit across separate docstrings: **trust is scoped to
+the type of evidence, not to the source.** Physical condition is direct
+observation, the warehouse wins it. Batch identity is an interpretation
+of scanner output, neither party is trusted directly, the registry
+arbitrates it. Best-before is a property of the resolved batch, not a
+value either party states, the registry provides it outright. Supplier
+revision order is a business fact the supplier's own system tracks,
+`sequence_number` wins it, not arrival time. Nothing in this system
+trusts a source globally, every rule trusts a specific kind of evidence
+for a specific kind of question.
 
 ### `schemas.py`, the domain model
 
@@ -179,7 +196,7 @@ were considered and at what confidence.
 
 ## Testing
 
-155 tests across seven files, one per module, plus property-based tests
+160 tests across seven files, one per module, plus property-based tests
 using Hypothesis for the invariants that matter most:
 
 * The engine never raises, for any generated combination of valid
