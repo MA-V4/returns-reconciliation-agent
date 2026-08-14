@@ -454,7 +454,6 @@ def render_html_report(
 <h1>Returns Reconciliation</h1>
 <div class="subtitle">Generated directly from LineItemDecision output. Read-only, cannot influence any decision above.</div>
 </header>
-<div class="stats">{stats_html}</div>
 <div class="determinism {determinism_class}">
 <span class="status-dot"></span>{determinism_text}
 </div>
