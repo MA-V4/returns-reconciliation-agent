@@ -50,6 +50,7 @@ class ConflictType(str, Enum):
     INTERNAL_ERROR = "internal_error"  # engine.py's fallback only, never raised from here
     MISSING_COUNTERPART = "missing_counterpart"  # ingestion.py: one source never reported at all
     SUPPLIER_NOTE_SEQUENCING = "supplier_note_sequencing"  # ingestion.py: which note was authoritative and why
+    IDENTITY_MISMATCH = "identity_mismatch"  # ingestion.py: warehouse and supplier disagree on SKU, or conflicting warehouse records for one line
 
 
 class Winner(str, Enum):
@@ -58,6 +59,49 @@ class Winner(str, Enum):
     REGISTRY = "registry"       # Rules 2 and 3: the independent arbiter won, not a party
     AGREEMENT = "agreement"     # no conflict existed
     UNRESOLVED = "unresolved"   # genuine toss-up, quarantine follows
+
+
+# The closed set of every reason_code this system can emit, across rules.py
+# and ingestion.py. A test (test_reason_codes.py) asserts every reason_code
+# produced by any real decision is a member of this set, so a typo'd or
+# stray code fails a test instead of silently never matching anything.
+KNOWN_REASON_CODES = frozenset({
+    # Rule 1: condition
+    "CONDITION_AGREEMENT",
+    "CONDITION_WAREHOUSE_OVERRIDE",
+    "CONDITION_UNKNOWN_UNRESOLVED",
+    # Rule 2: batch code
+    "BATCH_EXACT_AGREEMENT",
+    "BATCH_REPAIRED_AND_CORROBORATED",
+    "BATCH_WAREHOUSE_REGISTRY_MATCH",
+    "BATCH_SUPPLIER_REGISTRY_MATCH",
+    "BATCH_UNRESOLVED",
+    # Rule 3: best-before
+    "BEST_BEFORE_FROM_REGISTRY",
+    "BEST_BEFORE_UNRESOLVED_BATCH",
+    "BEST_BEFORE_REGISTRY_ENTRY_MISSING",
+    # Rule 4: quantity
+    "QUANTITY_CAPPED_TO_PHYSICAL_COUNT",
+    "QUANTITY_UNDERCLAIM_FLAGGED",
+    "QUANTITY_EXACT_MATCH",
+    # Rule 5: eligibility
+    "ELIGIBILITY_AGREEMENT",
+    "ELIGIBILITY_UNKNOWN_CONDITION_UNRESOLVED",
+    "ELIGIBILITY_WAREHOUSE_DAMAGE_OVERRIDE",
+    "ELIGIBILITY_SUPPLIER_STANDS",
+    # ingestion.py: sequencing
+    "SEQUENCING_SINGLE_NOTE",
+    "SEQUENCING_ARRIVAL_ORDER_OVERRIDDEN",
+    "SEQUENCING_ORDER_CONFIRMED",
+    "SEQUENCING_UNRESOLVED_CONFLICT",
+    # ingestion.py: missing evidence / identity integrity
+    "MISSING_WAREHOUSE_EVIDENCE",
+    "MISSING_SUPPLIER_EVIDENCE",
+    "SKU_MISMATCH",
+    "CONFLICTING_WAREHOUSE_RECORDS",
+    # engine.py / ingestion.py: internal error fallback
+    "INTERNAL_ERROR",
+})
 
 
 @dataclass(frozen=True)
@@ -76,9 +120,8 @@ class RuleOutcome:
     detail: dict = field(default_factory=dict)
 
 
-# ---------------------------------------------------------------------------
+
 # Rule 1: condition / salvageability disagreement
-# ---------------------------------------------------------------------------
 
 # Explicit assumption, stated here rather than left implicit: MINOR_DAMAGE is
 # treated as restockable. There is no fourth "discount" disposition in this
@@ -159,10 +202,8 @@ def resolve_condition(
     )
 
 
-# ---------------------------------------------------------------------------
-# Rule 2: batch code mismatch, and its repair helper
-# ---------------------------------------------------------------------------
 
+# Rule 2: batch code mismatch, and its repair helper
 
 @dataclass(frozen=True)
 class BatchRepairResult:
@@ -238,8 +279,10 @@ def resolve_batch_code(
     """Rule 2. See DECISION_RULES.md.
 
     Assumes warehouse.sku == supplier.sku, that's the correlation
-    assumption from the schema design (ADR-005), enforced upstream during
-    ingestion, not re-checked here.
+    assumption from the schema design (ADR-005). Enforced upstream in
+    ingestion.py's _process_one_line (SKU_MISMATCH quarantines the line
+    before this function is ever called), not re-checked here, this
+    function trusts its caller rather than re-validating on every rule.
     """
     candidates = [entry for entry in registry if entry.sku == warehouse.sku]
 
@@ -341,10 +384,8 @@ def resolve_batch_code(
     )
 
 
-# ---------------------------------------------------------------------------
-# Rule 3: best-before / temporal disagreement
-# ---------------------------------------------------------------------------
 
+# Rule 3: best-before / temporal disagreement
 
 def resolve_best_before(
     batch_outcome: RuleOutcome, registry: Sequence[BatchRegistryEntry]
@@ -401,10 +442,8 @@ def resolve_best_before(
     )
 
 
-# ---------------------------------------------------------------------------
-# Rule 4: quantity dispute
-# ---------------------------------------------------------------------------
 
+# Rule 4: quantity dispute
 
 def resolve_quantity(
     warehouse: WarehouseInspectionRecord, supplier: SupplierCreditNote
@@ -469,10 +508,8 @@ def resolve_quantity(
     )
 
 
-# ---------------------------------------------------------------------------
-# Rule 5: eligibility dispute
-# ---------------------------------------------------------------------------
 
+# Rule 5: eligibility dispute
 
 def resolve_eligibility(
     warehouse: WarehouseInspectionRecord, supplier: SupplierCreditNote

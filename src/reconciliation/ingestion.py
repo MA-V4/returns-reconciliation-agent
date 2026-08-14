@@ -31,10 +31,8 @@ from reconciliation.schemas import (
 )
 
 
-# ---------------------------------------------------------------------------
-# 1. Multi-note sequence resolution
-# ---------------------------------------------------------------------------
 
+# 1. Multi-note sequence resolution
 
 @dataclass(frozen=True)
 class SupplierNoteResolution:
@@ -150,10 +148,8 @@ def resolve_authoritative_supplier_note(
     )
 
 
-# ---------------------------------------------------------------------------
-# 2. Tolerant parsing at the system boundary
-# ---------------------------------------------------------------------------
 
+# 2. Tolerant parsing at the system boundary
 
 @dataclass(frozen=True)
 class ParseOutcome:
@@ -191,10 +187,8 @@ def parse_supplier_note(raw: dict) -> ParseOutcome:
         )
 
 
-# ---------------------------------------------------------------------------
-# 3. Pipeline entry point
-# ---------------------------------------------------------------------------
 
+# 3. Pipeline entry point
 
 def _sequencing_rule_outcome(resolution: SupplierNoteResolution) -> RuleOutcome:
     """Turns a SupplierNoteResolution into an audit-trail entry. Without
@@ -260,13 +254,21 @@ def process_return(
     return_line_id, resolved and reconciled, per line, independently. A
     bad line doesn't take the rest of the shipment down with it.
 
-    Assumes at most one warehouse record per return_line_id (that failure
-    mode isn't the one named in the brief, the supplier side is); if more
-    than one is provided for the same line, the last one in the input
-    silently wins, an explicit assumption, not a hidden one.
+    At most one warehouse record per return_line_id is still the expected
+    shape (that failure mode isn't the one named in the brief, the
+    supplier side is). But it's no longer a silent assumption: if more
+    than one is provided for the same line and they genuinely disagree,
+    that line is quarantined with a named reason rather than silently
+    keeping whichever one happened to be last in the input. Duplicate
+    submissions with identical content are harmless and pass through, the
+    same principle already applied to duplicate supplier notes.
     """
     warehouse_by_line: dict[str, WarehouseInspectionRecord] = {}
+    conflicting_warehouse_lines: set[str] = set()
     for warehouse in warehouse_records:
+        existing = warehouse_by_line.get(warehouse.return_line_id)
+        if existing is not None and existing != warehouse:
+            conflicting_warehouse_lines.add(warehouse.return_line_id)
         warehouse_by_line[warehouse.return_line_id] = warehouse
 
     notes_by_line: dict[str, list[SupplierCreditNote]] = {}
@@ -278,6 +280,17 @@ def process_return(
     decisions = []
     for return_line_id in all_line_ids:
         try:
+            if return_line_id in conflicting_warehouse_lines:
+                decisions.append(_quarantine_for_missing_evidence(
+                    return_line_id,
+                    warehouse_by_line[return_line_id].sku,
+                    "Multiple warehouse inspection records exist for this return "
+                    "line with genuinely conflicting content; no reliable way to "
+                    "determine which inspection is authoritative.",
+                    reason_code="CONFLICTING_WAREHOUSE_RECORDS",
+                    conflict_type=ConflictType.IDENTITY_MISMATCH,
+                ))
+                continue
             decisions.append(_process_one_line(return_line_id, warehouse_by_line, notes_by_line, registry))
         except Exception as exc:  # noqa: BLE001 - a batch-level bug on one line must not sink the rest
             decisions.append(_quarantine_for_internal_error(return_line_id, exc))
@@ -341,13 +354,31 @@ def _process_one_line(
             physical_quantity=warehouse.inspected_quantity,
         )
 
+    if warehouse.sku != resolution.authoritative_note.sku:
+        return _quarantine_for_missing_evidence(
+            return_line_id,
+            warehouse.sku,
+            f"Warehouse record claims SKU {warehouse.sku!r}; supplier note claims "
+            f"SKU {resolution.authoritative_note.sku!r}. These records disagree on "
+            "what item this even is, not a value to arbitrate between, this line "
+            "cannot be safely reconciled until the pairing itself is corrected.",
+            reason_code="SKU_MISMATCH",
+            conflict_type=ConflictType.IDENTITY_MISMATCH,
+            physical_quantity=warehouse.inspected_quantity,
+        )
+
     decision = reconcile_line_item(warehouse, resolution.authoritative_note, registry)
     sequencing_outcome = _sequencing_rule_outcome(resolution)
     return replace(decision, rule_outcomes=(sequencing_outcome,) + decision.rule_outcomes)
 
 
 def _quarantine_for_missing_evidence(
-    return_line_id: str, sku: str, reason: str, reason_code: str, physical_quantity: int = 0
+    return_line_id: str,
+    sku: str,
+    reason: str,
+    reason_code: str,
+    physical_quantity: int = 0,
+    conflict_type: ConflictType = ConflictType.MISSING_COUNTERPART,
 ) -> LineItemDecision:
     return LineItemDecision(
         return_line_id=return_line_id,
@@ -360,7 +391,7 @@ def _quarantine_for_missing_evidence(
         creditable_quantity=0,
         rule_outcomes=(
             RuleOutcome(
-                conflict_type=ConflictType.MISSING_COUNTERPART,
+                conflict_type=conflict_type,
                 conflict_detected=True,
                 winner=Winner.UNRESOLVED,
                 resolved_value=None,

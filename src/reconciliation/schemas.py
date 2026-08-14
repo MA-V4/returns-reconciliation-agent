@@ -21,7 +21,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ConditionGrade(str, Enum):
@@ -52,7 +52,7 @@ class Disposition(str, Enum):
 class WarehouseInspectionRecord(BaseModel):
     """One warehouse inspector's assessment of one return line item.
 
-    The warehouse sees the physical state
+    This is a claim, not ground truth: the warehouse sees the physical state
     but can misread batch codes under poor lighting or scanner fault.
     `raw_scanner_output` is preserved verbatim, garbled or not, so the audit
     trail can later show exactly what was read and what was discarded.
@@ -119,3 +119,17 @@ class BatchRegistryEntry(BaseModel):
     sku: str
     manufactured_date: date
     best_before_date: date
+
+    @model_validator(mode="after")
+    def _best_before_after_manufactured(self) -> "BatchRegistryEntry":
+        # A registry that isn't internally consistent shouldn't be trusted
+        # as ground truth for anything. This doesn't validate the registry's
+        # *content* against the outside world, only that a single entry
+        # isn't self-contradictory, a batch can't expire before it existed.
+        if self.best_before_date <= self.manufactured_date:
+            raise ValueError(
+                f"best_before_date ({self.best_before_date}) must be after "
+                f"manufactured_date ({self.manufactured_date}) for batch "
+                f"{self.batch_code!r}"
+            )
+        return self
