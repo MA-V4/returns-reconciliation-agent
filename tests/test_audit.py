@@ -48,15 +48,16 @@ def decision(**overrides):
         eligible_for_credit=True,
         physical_quantity=4,
         creditable_quantity=4,
+        overall_confidence=1.0,
         rule_outcomes=(outcome(),),
     )
     base.update(overrides)
     return LineItemDecision(**base)
 
 
-# ---------------------------------------------------------------------------
+
 # _serialize_value
-# ---------------------------------------------------------------------------
+
 
 class TestSerializeValue:
     def test_enum_becomes_its_value(self):
@@ -78,9 +79,9 @@ class TestSerializeValue:
         assert _serialize_value("text") == "text"
 
 
-# ---------------------------------------------------------------------------
+
 # rule_outcome_to_dict
-# ---------------------------------------------------------------------------
+
 
 class TestRuleOutcomeToDict:
     def test_all_fields_present_with_correct_types(self):
@@ -120,9 +121,9 @@ class TestRuleOutcomeToDict:
         assert d["detail"] == {}
 
 
-# ---------------------------------------------------------------------------
+
 # decision_to_dict
-# ---------------------------------------------------------------------------
+
 
 class TestDecisionToDict:
     def test_top_level_structure(self):
@@ -148,9 +149,9 @@ class TestDecisionToDict:
         assert d["rule_outcomes"][1]["conflict_type"] == "quantity"
 
 
-# ---------------------------------------------------------------------------
+
 # write_audit_log
-# ---------------------------------------------------------------------------
+
 
 class TestWriteAuditLog:
     def test_writes_valid_json_that_round_trips(self, tmp_path):
@@ -171,9 +172,9 @@ class TestWriteAuditLog:
             assert json.load(f) == []
 
 
-# ---------------------------------------------------------------------------
+
 # render_decision_report
-# ---------------------------------------------------------------------------
+
 
 class TestRenderDecisionReport:
     def test_contains_key_identifying_fields(self):
@@ -241,9 +242,9 @@ class TestRenderDecisionReport:
         assert "candidates considered" not in report
 
 
-# ---------------------------------------------------------------------------
+
 # Boxed terminal report
-# ---------------------------------------------------------------------------
+
 
 class TestBoxRenderer:
     def test_structural_lines_are_all_the_same_length(self):
@@ -290,9 +291,9 @@ class TestBoxRenderer:
         assert "RL-2" in report
 
 
-# ---------------------------------------------------------------------------
+
 # render_shipment_report
-# ---------------------------------------------------------------------------
+
 
 class TestRenderShipmentReport:
     def test_summary_line_counts_by_disposition(self):

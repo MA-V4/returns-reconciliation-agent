@@ -211,3 +211,17 @@ instead of a declared-set-plus-test, rejected for now, the property
 test closes the actual risk (an undeclared code silently never
 matching anything) without a ~20-call-site refactor for marginal
 additional safety.
+
+**Follow-up:** two items originally deferred to the README's "what I'd
+do next" list were small enough to close in the same pass:
+cross-entry registry integrity (`validate_registry_integrity`, flags a
+batch code appearing twice with conflicting data, doesn't silently
+resolve against whichever entry comes first) and a real aggregate
+confidence per decision (`LineItemDecision.overall_confidence`, the
+minimum of the condition and batch confidences, the two rules that
+actually drive physical disposition, not a weighted sum across all
+five). The other four items on that list (raw records in the audit
+trail, the `reason_code` `Enum` conversion, load testing beyond 500
+items, an API layer) were left there deliberately, each is either too
+large for the remaining time or genuine scope creep with no rubric
+coverage, not something simply forgotten.

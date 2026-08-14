@@ -18,7 +18,7 @@ cited evidence, never by which party said it.
 
 ```powershell
 pip install -e ".[dev]"
-pytest                              # 147 tests
+pytest                              # 155 tests
 python -m reconciliation.cli        # runs a built-in demo shipment
 python -m reconciliation.cli --box  # same demo, boxed report for recording
 python -m reconciliation.cli --output audit_log.json   # writes the full audit log
@@ -55,7 +55,7 @@ This was the first architecture decision made and it still holds. A
 decision that affects real inventory and real credit needs to be
 reproducible on rerun, testable rule by rule, and explainable by citing
 the specific rule that fired, not by describing what a model tends to
-do. Every one of the 147 tests in this repo tests deterministic code.
+do. Every one of the 155 tests in this repo tests deterministic code.
 An LLM in the decision path would make none of that possible. Full
 reasoning in `ADR.md`, decision ADR-001.
 
@@ -179,7 +179,7 @@ were considered and at what confidence.
 
 ## Testing
 
-147 tests across seven files, one per module, plus property-based tests
+155 tests across seven files, one per module, plus property-based tests
 using Hypothesis for the invariants that matter most:
 
 * The engine never raises, for any generated combination of valid
@@ -203,51 +203,12 @@ records (a data integrity failure, not a value to arbitrate), multiple
 conflicting warehouse records for one return line, a self-contradictory
 registry entry rejected at construction, and a 500-item batch checked
 line by line to confirm no item's resolved batch code ever leaks into
-another's.
-
-## What I'd do next, with more time
-
-In rough priority order, the things that would genuinely improve this
-rather than just add to it:
-
-1. **Thread the raw warehouse and supplier records into the audit
-   trail, not just the resolved outcome.** Right now a reviewer sees
-   what each rule decided and why, in prose, but not a literal
-   side-by-side of what each side originally claimed. `RuleOutcome.reasoning`
-   states both claims in text where relevant, but a structured
-   `evidence_used` field carrying the actual source values would make
-   the audit trail queryable, not just readable.
-2. **Cross-entry registry integrity.** `BatchRegistryEntry` now rejects
-   a self-contradictory single entry (`best_before_date` before
-   `manufactured_date`), but nothing checks the registry as a whole for
-   duplicate batch codes pointing at conflicting SKUs or dates. Scoped
-   out of the last review pass deliberately, single-entry validation
-   closed the sharper risk for the time available.
-3. **`reason_code` as a real `Enum`, not a declared set plus a test.**
-   The property-based test in `test_integrity.py` closes the actual
-   risk, an undeclared code silently never matching anything, but an
-   `Enum` would close it structurally instead of by convention. Held
-   off because it's a ~20-call-site refactor for marginal extra safety
-   over what the test already guarantees, worth doing if this became a
-   long-lived codebase rather than a scoped submission.
-4. **A principled aggregate confidence per decision**, not per rule.
-   Explicitly not the arbitrary weighted-sum model floated during
-   review and rejected in `ADR.md`, invented weights would be worse for
-   defensibility, not better. The honest version would be something
-   like the minimum of the confidences that actually drove physical
-   disposition, a decision is only as strong as its weakest relevant
-   link, that's a real property, not a made-up score.
-5. **Load testing beyond 500 items.** `test_integrity.py` proves
-   correctness and no cross-item state leakage at that scale, not
-   performance at production volume. `process_return`'s grouping is a
-   single dict pass, so there's no obvious algorithmic reason it
-   wouldn't scale, but "should" and "measured to" are different claims.
-6. **If this ever needed to run against real systems**: a thin API
-   layer in front of `process_return`, following the same principle
-   `html_report.py` already proves out, a layer that reads and renders
-   decisions, never one that makes them. Containerising it would be the
-   natural next step after that, not before it, infrastructure serving
-   logic that doesn't exist yet isn't worth building first.
+another's, a registry containing the same batch code twice with
+conflicting SKU or dates (flagged, not silently resolved against
+whichever entry happens to come first), and that a decision's
+`overall_confidence`, the minimum of the two confidences that actually
+drive physical disposition, correctly drops to zero when condition is
+genuinely unknown rather than only ever reporting a false 1.0.
 
 ## Further reading
 

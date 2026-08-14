@@ -40,6 +40,7 @@ class LineItemDecision:
     eligible_for_credit: Optional[bool]
     physical_quantity: int
     creditable_quantity: int
+    overall_confidence: float
     rule_outcomes: tuple[RuleOutcome, ...]
 
 
@@ -64,6 +65,7 @@ def reconcile_line_item(
             eligible_for_credit=None,
             physical_quantity=0,
             creditable_quantity=0,
+            overall_confidence=0.0,
             rule_outcomes=(
                 RuleOutcome(
                     conflict_type=ConflictType.INTERNAL_ERROR,
@@ -89,7 +91,7 @@ def _reconcile_line_item(
 ) -> LineItemDecision:
     """Runs all five rules and aggregates them.
 
-    Physical disposition (scrap/restock/quarantine) is driven only by
+    Physical disposition (scrap/restock/quarantine) is driven by
     Rule 1 (condition) and Rule 2 (batch resolution), those are the two
     things that determine whether the physical item can be safely routed
     at all. Rule 4 (quantity) and Rule 5 (eligibility) resolve
@@ -137,5 +139,11 @@ def _reconcile_line_item(
         eligible_for_credit=eligibility_outcome.resolved_value,
         physical_quantity=warehouse.inspected_quantity,
         creditable_quantity=quantity_outcome.resolved_value,
+        # The decision is only as strong as the weaker of the two rules
+        # that actually decide physical disposition. Deliberately not a
+        # weighted sum across all five rules, invented weights would be
+        # less defensible than this, not more (see ADR-008): this number
+        # traces to two specific, named confidences, not a formula.
+        overall_confidence=min(condition_outcome.confidence, batch_outcome.confidence),
         rule_outcomes=rule_outcomes,
     )

@@ -53,6 +53,7 @@ def decision_to_dict(decision: LineItemDecision) -> dict:
         "eligible_for_credit": decision.eligible_for_credit,
         "physical_quantity": decision.physical_quantity,
         "creditable_quantity": decision.creditable_quantity,
+        "overall_confidence": decision.overall_confidence,
         "requires_human_review": decision.disposition.value == "quarantine",
         "rule_outcomes": [rule_outcome_to_dict(o) for o in decision.rule_outcomes],
     }
@@ -75,7 +76,7 @@ def render_decision_report(decision: LineItemDecision) -> str:
     """
     lines = [
         f"Return line {decision.return_line_id} (SKU {decision.sku})",
-        f"  Disposition: {decision.disposition.value.upper()}",
+        f"  Disposition: {decision.disposition.value.upper()} (overall confidence {decision.overall_confidence:.2f})",
         f"  Temporal bucket: {decision.temporal_bucket}",
         f"  Resolved batch code: {decision.resolved_batch_code or 'unresolved'}",
         f"  Eligible for credit: {decision.eligible_for_credit}",
@@ -180,6 +181,7 @@ def render_decision_box(decision: LineItemDecision) -> str:
     lines.append(_box_line(f"BEST BEFORE:  {decision.temporal_bucket}"))
     lines.append(_box_line(f"PHYSICAL QTY: {decision.physical_quantity}"))
     lines.append(_box_line(f"CREDIT QTY:   {decision.creditable_quantity}"))
+    lines.append(_box_line(f"CONFIDENCE:   {decision.overall_confidence:.2f}"))
     lines.append(_box_bottom())
     return "\n".join(lines)
 

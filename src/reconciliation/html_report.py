@@ -9,10 +9,10 @@ dependency, opens correctly with no internet connection.
 Design direction: dark, restrained, confident, matching the actual
 stated design philosophy of the company this was built for ("decisions,
 not dashboards"), not a generic AI-product dashboard skin. One accent
-color per disposition, flat, no glow or gradient. Sans-serif throughout,
-monospace strictly for literal data (batch codes, IDs, timestamps,
-confidence, reason codes). Summary stats are plain numbers with small
-labels, no icon cards.
+color per disposition, used on the card border and the verdict text,
+flat, no glow or gradient. Sans-serif throughout, monospace strictly
+for literal data (batch codes, IDs, timestamps, confidence, reason
+codes).
 """
 
 from __future__ import annotations
@@ -66,37 +66,6 @@ header.masthead .subtitle {
   font-family: var(--font-mono);
   font-size: 12.5px;
   color: var(--text-muted);
-}
-
-.stats {
-  display: flex;
-  flex-wrap: nowrap;
-  margin: 40px 0 44px;
-  padding: 0;
-}
-
-.stat {
-  padding: 0 28px 0 0;
-  margin-right: 28px;
-  border-right: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
-.stat:last-child { border-right: none; margin-right: 0; }
-
-.stat .stat-value {
-  font-family: var(--font-mono);
-  font-size: 28px;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.stat .stat-label {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-top: 6px;
-  letter-spacing: 0.01em;
-  white-space: nowrap;
 }
 
 .determinism {
@@ -297,7 +266,6 @@ footer.principle {
 @media (max-width: 480px) {
   .case-header { flex-direction: column; }
   .disposition { margin-top: 10px; }
-  .stat { margin-right: 20px; padding-right: 20px; }
 }
 """
 
@@ -377,6 +345,7 @@ def _case_card(decision: LineItemDecision) -> str:
         ("Physical qty", decision.physical_quantity),
         ("Creditable qty", f"{decision.creditable_quantity}{credit_note}"),
         ("Credit eligible", decision.eligible_for_credit),
+        ("Confidence", f"{decision.overall_confidence:.2f}"),
     ]
     facts_html = "".join(
         f'<div><div class="fact-label">{_escape(label)}</div>'
@@ -410,25 +379,6 @@ def render_html_report(
     already-computed LineItemDecision (or the already-computed boolean
     result of verify_determinism), nothing is decided here.
     """
-    counts: dict[str, int] = {}
-    for decision in decisions:
-        counts[decision.disposition.value] = counts.get(decision.disposition.value, 0) + 1
-
-    conflict_count = sum(
-        1 for d in decisions for o in d.rule_outcomes if o.conflict_detected
-    )
-
-    stats = [(str(len(decisions)), "return lines"), (str(conflict_count), "conflicts resolved")]
-    for label in ("restock", "scrap", "quarantine"):
-        if label in counts:
-            stats.append((str(counts[label]), label))
-
-    stats_html = "".join(
-        f'<div class="stat"><div class="stat-value">{_escape(value)}</div>'
-        f'<div class="stat-label">{_escape(label)}</div></div>'
-        for value, label in stats
-    )
-
     determinism_class = "pass" if determinism_verified else "fail"
     determinism_text = (
         "<strong>Verified deterministic.</strong> process_return executed twice against "
