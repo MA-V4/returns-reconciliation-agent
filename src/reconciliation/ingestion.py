@@ -1,5 +1,5 @@
 """
-Ingestion layer. Three things:
+Ingestion layer. Three things live here:
 
 1. resolve_authoritative_supplier_note: the actual fix for the
    out-of-order-timestamp failure mode. Multiple SupplierCreditNote
@@ -33,6 +33,8 @@ from reconciliation.schemas import (
 
 
 # 1. Multi-note sequence resolution
+
+
 
 @dataclass(frozen=True)
 class SupplierNoteResolution:
@@ -150,6 +152,8 @@ def resolve_authoritative_supplier_note(
 
 
 # 2. Tolerant parsing at the system boundary
+
+
 
 @dataclass(frozen=True)
 class ParseOutcome:
@@ -319,7 +323,9 @@ def process_return(
                 continue
             decisions.append(_process_one_line(return_line_id, warehouse_by_line, notes_by_line, registry))
         except Exception as exc:  # noqa: BLE001 - a batch-level bug on one line must not sink the rest
-            decisions.append(_quarantine_for_internal_error(return_line_id, exc))
+            known_warehouse = warehouse_by_line.get(return_line_id)
+            known_quantity = known_warehouse.inspected_quantity if known_warehouse else 0
+            decisions.append(_quarantine_for_internal_error(return_line_id, exc, physical_quantity=known_quantity))
     return tuple(decisions)
 
 
@@ -431,7 +437,9 @@ def _quarantine_for_missing_evidence(
     )
 
 
-def _quarantine_for_internal_error(return_line_id: str, exc: Exception) -> LineItemDecision:
+def _quarantine_for_internal_error(
+    return_line_id: str, exc: Exception, physical_quantity: int = 0
+) -> LineItemDecision:
     return LineItemDecision(
         return_line_id=return_line_id,
         sku="UNKNOWN",
@@ -439,7 +447,7 @@ def _quarantine_for_internal_error(return_line_id: str, exc: Exception) -> LineI
         temporal_bucket=UNRESOLVED_BUCKET,
         resolved_batch_code=None,
         eligible_for_credit=None,
-        physical_quantity=0,
+        physical_quantity=physical_quantity,
         creditable_quantity=0,
         overall_confidence=0.0,
         rule_outcomes=(

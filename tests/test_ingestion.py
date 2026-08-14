@@ -243,12 +243,15 @@ class TestProcessReturn:
         monkeypatch.setattr("reconciliation.ingestion.resolve_authoritative_supplier_note", boom)
 
         decisions = process_return(
-            [wh(claimed_batch_code="BC-2026-0817-A")],
+            [wh(claimed_batch_code="BC-2026-0817-A", inspected_quantity=23)],
             [sn(claimed_batch_code="BC-2026-0817-A")],
             REGISTRY,
         )
         assert decisions[0].disposition == Disposition.QUARANTINE
         assert decisions[0].rule_outcomes[0].conflict_type == ConflictType.INTERNAL_ERROR
+        # same fix as the engine-level test: known physical quantity
+        # must survive even a batch-pipeline-level bug
+        assert decisions[0].physical_quantity == 23
 
 
 # ---------------------------------------------------------------------------

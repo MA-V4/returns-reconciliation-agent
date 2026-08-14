@@ -66,9 +66,9 @@ REGISTRY = [
 ]
 
 
-# ---------------------------------------------------------------------------
+
 # Straightforward end-to-end cases
-# ---------------------------------------------------------------------------
+
 
 class TestReconcileLineItemGoldenCases:
     def test_clean_sellable_agreement_restocks(self):
@@ -147,9 +147,9 @@ class TestReconcileLineItemGoldenCases:
         assert len(decision.rule_outcomes) == 5  # reconcile_line_item's 5, sequencing is ingestion's job
 
 
-# ---------------------------------------------------------------------------
+
 # ADR-006: the engine must never propagate a crash
-# ---------------------------------------------------------------------------
+
 
 class TestEngineNeverCrashes:
     def test_internal_error_in_a_rule_falls_back_to_quarantine(self, monkeypatch):
@@ -158,18 +158,22 @@ class TestEngineNeverCrashes:
 
         monkeypatch.setattr("reconciliation.engine.resolve_condition", boom)
 
-        decision = reconcile_line_item(wh(), sn(), REGISTRY)
+        decision = reconcile_line_item(wh(inspected_quantity=17), sn(), REGISTRY)
 
         assert decision.disposition == Disposition.QUARANTINE
         assert decision.temporal_bucket == UNRESOLVED_BUCKET
         assert len(decision.rule_outcomes) == 1
         assert decision.rule_outcomes[0].conflict_type == ConflictType.INTERNAL_ERROR
         assert decision.rule_outcomes[0].triggers_quarantine is True
+        # the actual fix: a known physical fact (17 units, physically
+        # counted) must survive a bug in the reconciliation logic, not
+        # get silently discarded as a fabricated zero
+        assert decision.physical_quantity == 17
 
 
-# ---------------------------------------------------------------------------
+
 # Property-based invariants
-# ---------------------------------------------------------------------------
+
 
 _warehouse_strategy = st.builds(
     WarehouseInspectionRecord,
