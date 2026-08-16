@@ -165,7 +165,7 @@ rejected, collapses two genuinely different evidentiary states into one.
 
 ## ADR-008: Six integrity checks closed after review, not deferred
 
-**Context:** a review of the working system named six real gaps: no
+**Context:** a review of the working system where i found six real gaps: no
 large-batch/state-isolation test, no git history, `warehouse.sku ==
 supplier.sku` assumed but never checked, multiple warehouse records per
 line silently keeping the last one, `reason_code` values not validated

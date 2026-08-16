@@ -14,6 +14,12 @@ fixed source preference. Every disagreement is arbitrated against an
 independent fact (a batch registry, a physical count) or resolved by
 cited evidence, never by which party said it.
 
+The system is implemented as a deterministic reconciliation agent rather than an LLM agent: 
+it gathers independent evidence, detects conflicts, arbitrates each evidence dimension, routes stock, and produces an auditable decision. 
+An LLM is deliberately excluded from the authoritative decision path
+
+
+
 ## Quick start
 
 ```powershell
@@ -58,7 +64,7 @@ since that's a separate question with separate evidence behind it.
 
 ![RL-4: genuine quarantine](docs/images/rl-4-quarantine.png)
 
-## What it actually does
+## What it does
 
 Given a warehouse inspection record and one or more supplier credit
 notes for the same returned item, the agent:
@@ -80,13 +86,21 @@ notes for the same returned item, the agent:
 
 ## Why the decision engine is deterministic, not an LLM
 
-This was the first architecture decision made and it still holds. A
-decision that affects real inventory and real credit needs to be
+This was the first architecture decision. A
+decision that affects real inventory and financial credit needs to be
 reproducible on rerun, testable rule by rule, and explainable by citing
-the specific rule that fired, not by describing what a model tends to
-do. Every one of the 160 tests in this repo tests deterministic code.
-An LLM in the decision path would make none of that possible. Full
-reasoning in `ADR.md`, decision ADR-001.
+the specific rule and evidence that produced it.
+
+The decision engine therefore uses deterministic rules rather than an
+LLM. Every one of the 160 tests exercises deterministic decision logic,
+including the failure modes and edge cases described in this repository.
+
+An LLM could still be useful around the decision engine for tasks such
+as summarisation or operator assistance, but it is deliberately excluded
+from the authoritative decision path.
+
+Full reasoning and alternatives are documented in `ADR.md` under
+ADR-001.
 
 ## How it works, component by component
 
@@ -113,7 +127,7 @@ for a specific kind of question.
 ### `schemas.py`, the domain model
 
 Defines `WarehouseInspectionRecord`, `SupplierCreditNote`, and
-`BatchRegistryEntry`. The one design choice worth knowing here: the two
+`BatchRegistryEntry`. The one design choice worth knowing: the two
 source records are correlated by `return_line_id`, a stable identifier
 assigned when the return is authorised, never by batch code. Batch code
 is itself one of the disputed facts, using it as the join key would
@@ -265,6 +279,20 @@ genuinely unknown rather than only ever reporting a false 1.0.
   including the case against using an LLM on the decision path and the
   case against embedding-based batch code matching.
 * `TEST_STRATEGY.md`, the test plan written before this code existed.
+
+## What I would do next
+
+With more time, I would:
+
+1. Replace the built-in demo data with adapters for the real warehouse,
+   supplier, and batch-registry APIs.
+2. Persist audit events in an append-only store so decisions can be
+   queried and reviewed operationally.
+3. Add human review workflows for unresolved quarantine cases.
+4. Add monitoring around registry quality, supplier sequence anomalies,
+   and quarantine rates.
+5. Keep the authoritative decision engine deterministic, while optionally
+   adding an LLM layer for operator-facing summaries only.
 
 ## Project structure
 
