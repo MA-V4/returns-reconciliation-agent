@@ -5,14 +5,6 @@ cannot influence reconciliation decisions, every value here is read
 from an already-computed LineItemDecision, nothing is decided or
 derived here. No server, no build step, no external font or script
 dependency, opens correctly with no internet connection.
-
-Design direction: dark, restrained, confident, matching the actual
-stated design philosophy of the company this was built for ("decisions,
-not dashboards"), not a generic AI-product dashboard skin. One accent
-color per disposition, used on the card border and the verdict text,
-flat, no glow or gradient. Sans-serif throughout, monospace strictly
-for literal data (batch codes, IDs, timestamps, confidence, reason
-codes).
 """
 
 from __future__ import annotations
@@ -292,7 +284,7 @@ def _candidate_table(detail: dict, resolved_value) -> str:
         code = candidate.get("batch_code")
         confidence = candidate.get("confidence", 0.0)
         selected = code == resolved_value
-        label = "SELECTED" if selected else "rejected"
+        label = "RESOLVED" if selected else "not used"
         row_class = ' class="selected"' if selected else ""
         rows.append(
             f"<tr><td{row_class}>{_escape(code)}</td>"
