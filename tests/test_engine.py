@@ -131,20 +131,20 @@ class TestReconcileLineItemGoldenCases:
                 claimed_batch_code=None,
             ),
             sn(
-                restock_required=True,       # conflicts with MAJOR_DAMAGE
+                restock_required=True,         # conflicts with MAJOR_DAMAGE
                 credit_quantity=9,             # over the physical count of 4
                 eligible_for_credit=False,     # conflicts with MAJOR_DAMAGE + photo evidence
                 claimed_batch_code="BC-2026-0817-A",
             ),
             REGISTRY,
         )
-        assert decision.disposition == Disposition.SCRAP          # condition rule
-        assert decision.physical_quantity == 4                     # warehouse's actual count
+        assert decision.disposition == Disposition.SCRAP            # condition rule
+        assert decision.physical_quantity == 4                      # warehouse's actual count
         assert decision.creditable_quantity == 4                    # quantity rule capped it
         assert decision.eligible_for_credit is True                 # eligibility rule overrode it
-        assert decision.resolved_batch_code == "BC-2026-0817-A"    # batch rule repaired it
+        assert decision.resolved_batch_code == "BC-2026-0817-A"     # batch rule repaired it
         assert decision.temporal_bucket == "2027-08"                # best-before followed the batch
-        assert len(decision.rule_outcomes) == 5  # reconcile_line_item's 5, sequencing is ingestion's job
+        assert len(decision.rule_outcomes) == 5                     # reconcile_line_item's 5, sequencing is ingestion's job
 
 
 
