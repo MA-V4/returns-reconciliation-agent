@@ -18,9 +18,9 @@ cited evidence, never by which party said it.
 
 ```powershell
 pip install -e ".[dev]"
-pytest                                                 # 160 tests
-python -m reconciliation.cli                           # runs a built-in demo shipment
-python -m reconciliation.cli --box                     # same demo, boxed report for recording
+pytest                              # 160 tests
+python -m reconciliation.cli        # runs a built-in demo shipment
+python -m reconciliation.cli --box  # same demo, boxed report for recording
 python -m reconciliation.cli --output audit_log.json   # writes the full audit log
 python -m reconciliation.cli --html report.html        # writes and opens a static HTML case file
 ```
@@ -28,6 +28,35 @@ python -m reconciliation.cli --html report.html        # writes and opens a stat
 No input file is required to see it work end to end, the built-in demo
 scenario in `cli.py` covers all three dispositions and both named
 failure modes in a single run.
+
+## What it looks like
+
+`--html` writes a self-contained case-file page from the same
+`LineItemDecision` data every other renderer reads, no server, nothing
+decided in the page itself. These four are the built-in demo, one
+screenshot per outcome.
+
+**RL-1**, the control case, both sides agree completely, proving the
+agent doesn't manufacture conflict just to look busy.
+
+![RL-1: clean agreement, restock](docs/images/rl-1-restock.png)
+
+**RL-2**, pure arbitration, no corrupted data at all, just the supplier
+disputing condition, quantity, and eligibility, and losing on all three.
+
+![RL-2: three independent conflicts, scrap](docs/images/rl-2-scrap.png)
+
+**RL-3**, both named failure modes at once, a corrupted warehouse scan
+and out-of-order supplier notes, resolved by two independent mechanisms
+in the same decision. This is the centrepiece scenario described below.
+
+![RL-3: combined failure mode, restock](docs/images/rl-3-restock-combined-failure.png)
+
+**RL-4**, a genuine quarantine, condition is unknown, so the agent
+refuses to guess, though the batch code still resolves independently
+since that's a separate question with separate evidence behind it.
+
+![RL-4: genuine quarantine](docs/images/rl-4-quarantine.png)
 
 ## What it actually does
 
@@ -247,6 +276,7 @@ returns-reconciliation-agent/
 ├── TEST_STRATEGY.md
 ├── pyproject.toml
 ├── .gitignore
+├── docs/images/          screenshots referenced in this README
 ├── src/reconciliation/
 │   ├── __init__.py
 │   ├── schemas.py       domain model
