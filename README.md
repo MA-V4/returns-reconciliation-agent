@@ -18,9 +18,9 @@ cited evidence, never by which party said it.
 
 ```powershell
 pip install -e ".[dev]"
-pytest                              # 160 tests
-python -m reconciliation.cli        # runs a built-in demo shipment
-python -m reconciliation.cli --box  # same demo, boxed report for recording
+pytest                                                 # 160 tests
+python -m reconciliation.cli                           # runs a built-in demo shipment
+python -m reconciliation.cli --box                     # same demo, boxed report for recording
 python -m reconciliation.cli --output audit_log.json   # writes the full audit log
 python -m reconciliation.cli --html report.html        # writes and opens a static HTML case file
 ```
