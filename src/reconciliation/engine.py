@@ -27,6 +27,11 @@ from reconciliation.schemas import (
     WarehouseInspectionRecord,
 )
 
+
+# 1. AUDIT / UNRESOLVED STATE
+
+# Any evidence or processing failure that cannot be safely resolved
+# is explicitly represented rather than silently guessed.
 UNRESOLVED_BUCKET = "unknown_pending_review"
 
 
@@ -44,6 +49,15 @@ class LineItemDecision:
     rule_outcomes: tuple[RuleOutcome, ...]
 
 
+
+# 2. EVIDENCE INGESTION + SAFETY BOUNDARY
+
+# The public entry point receives the warehouse inspection,
+# supplier credit note and batch registry as the evidence set.
+#
+# ADR-006 guarantees that reconciliation never propagates an
+# exception. If anything unexpected fails, the item is quarantined
+# and the known physical evidence is preserved for audit.
 def reconcile_line_item(
     warehouse: WarehouseInspectionRecord,
     supplier: SupplierCreditNote,
@@ -63,11 +77,6 @@ def reconcile_line_item(
             temporal_bucket=UNRESOLVED_BUCKET,
             resolved_batch_code=None,
             eligible_for_credit=None,
-            # warehouse is the original, untouched parameter, still valid
-            # even though something failed inside _reconcile_line_item.
-            # Caught in review: this used to hardcode 0 here, discarding a
-            # physically known fact instead of a genuinely unknown one,
-            # exactly backwards for an audit system.
             physical_quantity=warehouse.inspected_quantity,
             creditable_quantity=0,
             overall_confidence=0.0,
@@ -92,31 +101,33 @@ def reconcile_line_item(
         )
 
 
+
+# 3. CONFLICT DETECTION + EVIDENCE ARBITRATION
+
+# Each evidence question is resolved independently.
+#
+# The system does NOT decide that the warehouse or supplier is
+# globally trustworthy. Instead, each rule determines which evidence
+# is strongest for that particular field.
 def _reconcile_line_item(
     warehouse: WarehouseInspectionRecord,
     supplier: SupplierCreditNote,
     registry: Sequence[BatchRegistryEntry],
 ) -> LineItemDecision:
-    """Runs all five rules and aggregates them.
 
-    Physical disposition (scrap/restock/quarantine) is driven only by
-    Rule 1 (condition) and Rule 2 (batch resolution), those are the two
-    things that determine whether the physical item can be safely routed
-    at all. Rule 4 (quantity) and Rule 5 (eligibility) resolve
-    independently and drive the financial outcome, not the physical one,
-    a legitimately damaged item can still be physically scrapped even if
-    a credit dispute over it is unresolved.
-
-    Assumes warehouse.return_line_id == supplier.return_line_id and
-    warehouse.sku == supplier.sku, that correlation is the caller's
-    responsibility (the ingestion layer), not re-validated here.
-    """
+    
+    # 3a. EVIDENCE ARBITRATION: FIVE INDEPENDENT RULES
+    
     condition_outcome = resolve_condition(warehouse, supplier)
     batch_outcome = resolve_batch_code(warehouse, supplier, registry)
-    best_before_outcome = resolve_best_before(warehouse, supplier, batch_outcome, registry)
+    best_before_outcome = resolve_best_before(
+        warehouse, supplier, batch_outcome, registry
+    )
     quantity_outcome = resolve_quantity(warehouse, supplier)
     eligibility_outcome = resolve_eligibility(warehouse, supplier)
 
+    # Collect the result of each evidence decision so that the
+    # final outcome remains explainable and auditable.
     rule_outcomes = (
         condition_outcome,
         batch_outcome,
@@ -125,6 +136,16 @@ def _reconcile_line_item(
         eligibility_outcome,
     )
 
+
+
+    # 4. DECISION RULES: PHYSICAL ROUTING
+
+    # Condition and batch identity determine whether the physical
+    # stock can be safely routed.
+    #
+    # If either creates an unresolved safety issue -> QUARANTINE.
+    # If condition confirms damage -> SCRAP.
+    # Otherwise -> RESTOCK.
     if condition_outcome.triggers_quarantine or batch_outcome.triggers_quarantine:
         disposition = Disposition.QUARANTINE
     elif condition_outcome.resolved_value is False:
@@ -132,12 +153,26 @@ def _reconcile_line_item(
     else:
         disposition = Disposition.RESTOCK
 
+
+
+    # 5. TEMPORAL BUCKET / RESOLVED EVIDENCE
+
+    # Best-before is derived from the winning evidence source.
+    # If it cannot be resolved safely, it remains explicitly
+    # unknown rather than being guessed.
     if best_before_outcome.resolved_value is None:
         temporal_bucket = UNRESOLVED_BUCKET
     else:
         d = best_before_outcome.resolved_value
         temporal_bucket = f"{d.year:04d}-{d.month:02d}"
 
+
+
+    # 6. FINAL DECISION + CONFIDENCE + AUDIT TRAIL
+
+    # The final object preserves the individual rule outcomes,
+    # resolved values and confidence so the decision can be traced
+    # back to the underlying evidence.
     return LineItemDecision(
         return_line_id=warehouse.return_line_id,
         sku=warehouse.sku,
@@ -147,11 +182,15 @@ def _reconcile_line_item(
         eligible_for_credit=eligibility_outcome.resolved_value,
         physical_quantity=warehouse.inspected_quantity,
         creditable_quantity=quantity_outcome.resolved_value,
-        # The decision is only as strong as the weaker of the two rules
-        # that actually decide physical disposition. Deliberately not a
-        # weighted sum across all five rules, invented weights would be
-        # less defensible than this, not more (see ADR-008): this number
-        # traces to two specific, named confidences, not a formula.
-        overall_confidence=min(condition_outcome.confidence, batch_outcome.confidence),
+
+        # Confidence deliberately follows the weaker of the two
+        # rules responsible for physical disposition. This avoids
+        # inventing arbitrary weights across unrelated evidence.
+        overall_confidence=min(
+            condition_outcome.confidence,
+            batch_outcome.confidence,
+        ),
+
+        # Preserve every rule outcome for explainability and audit.
         rule_outcomes=rule_outcomes,
     )
